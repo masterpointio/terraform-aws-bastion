@@ -126,3 +126,9 @@ variable "allow_ssh_commands" {
   type        = string
   default     = ""
 }
+
+variable "create_alb" {
+  description = "Whether to create the Application Load Balancer for this bastion host or not."
+  type        = bool
+  default     = true
+}

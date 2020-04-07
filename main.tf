@@ -182,21 +182,21 @@ data "aws_iam_policy_document" "bastion_host_policy_document" {
 
 }
 
-
 resource "aws_route53_record" "bastion_record_name" {
+  count   = var.create_dns_record && var.create_alb ? 1 : 0
   name    = var.bastion_record_name
   zone_id = var.hosted_zone_id
   type    = "A"
-  count   = var.create_dns_record ? 1 : 0
 
   alias {
     evaluate_target_health = true
-    name                   = aws_lb.bastion_lb.dns_name
-    zone_id                = aws_lb.bastion_lb.zone_id
+    name                   = aws_lb.bastion_lb.0.dns_name
+    zone_id                = aws_lb.bastion_lb.0.zone_id
   }
 }
 
 resource "aws_lb" "bastion_lb" {
+  count    = var.create_alb ? 1 : 0
   internal = var.is_lb_private
   name     = "${local.name_prefix}-lb"
 
@@ -207,6 +207,7 @@ resource "aws_lb" "bastion_lb" {
 }
 
 resource "aws_lb_target_group" "bastion_lb_target_group" {
+  count       = var.create_alb ? 1 : 0
   name        = "${local.name_prefix}-lb-target"
   port        = var.public_ssh_port
   protocol    = "TCP"
@@ -222,14 +223,15 @@ resource "aws_lb_target_group" "bastion_lb_target_group" {
 }
 
 resource "aws_lb_listener" "bastion_lb_listener_22" {
-  default_action {
-    target_group_arn = aws_lb_target_group.bastion_lb_target_group.arn
-    type             = "forward"
-  }
-
-  load_balancer_arn = aws_lb.bastion_lb.arn
+  count             = var.create_alb ? 1 : 0
+  load_balancer_arn = aws_lb.bastion_lb.0.arn
   port              = var.public_ssh_port
   protocol          = "TCP"
+
+  default_action {
+    target_group_arn = aws_lb_target_group.bastion_lb_target_group.0.arn
+    type             = "forward"
+  }
 }
 
 resource "aws_iam_instance_profile" "bastion_host_profile" {
@@ -287,9 +289,7 @@ resource "aws_autoscaling_group" "bastion_auto_scaling_group" {
   health_check_grace_period = 180
   health_check_type         = "EC2"
 
-  target_group_arns = [
-    aws_lb_target_group.bastion_lb_target_group.arn,
-  ]
+  target_group_arns = aws_lb_target_group.bastion_lb_target_group.*.arn
 
   termination_policies = [
     "OldestLaunchConfiguration",
